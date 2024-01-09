@@ -9,6 +9,7 @@
 #include <string.h>
 
 #define BUFFER_CAPACITY 7
+#define SOCKET_END_MESSAGE ":end"
 
 /**
  * SPRAVA
@@ -85,6 +86,11 @@ void ThreadData_produce(THREAD_DATA *data) {
 
         char odpovedKlienta[256];
         scanf("%s", odpovedKlienta);
+
+        if (strcmp(odpovedKlienta, SOCKET_END_MESSAGE) == 0) {
+            printf("Received 'end' message. Exiting...\n");
+            exit(0);  // or use another method to gracefully exit the program
+        }
 
         pthread_mutex_lock(&data->mutex);
         while (data->buffer_size >= BUFFER_CAPACITY) {
@@ -193,7 +199,7 @@ int main(int argc, char *argv[]) {
 
     read(sockfd, buffer, 255);
 
-    printf("VYSLEDOK SIMULÁCIE\n");
+    printf("\n******************\nVYSLEDOK SIMULÁCIE\n");
     printf("%s\n", buffer);
     close(sockfd);
     ThreadData_destroy(&data);
