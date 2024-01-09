@@ -10,10 +10,43 @@
 
 #define BUFFER_CAPACITY 7
 
-typedef struct Sprava{
-    char ans[BUFFER_CAPACITY][256];
+/**
+ * SPRAVA
+ */
+typedef struct Sprava {
+    char odpovede[BUFFER_CAPACITY][256];
 } SPRAVA;
 
+void sprava_setOdpoved(SPRAVA *sprava, int index, const char *hodnota) {
+    if (index >= 0 && index < BUFFER_CAPACITY) {
+        snprintf(sprava->odpovede[index], sizeof(sprava->odpovede[index]), "%s", hodnota);
+    }
+}
+
+/**
+ * KODOVANIE ODPOVEDI KLIENTA,(SPRAVY) DO 1 RETAZCA
+ * @param sprava
+ * @param output
+ */
+void sprava_koduj(const SPRAVA *sprava, char *output) {
+    snprintf(output, 1024, "%s;%s;%s;%s;%s;%s;%s;",
+             sprava->odpovede[0], sprava->odpovede[1], sprava->odpovede[2],
+             sprava->odpovede[3], sprava->odpovede[4], sprava->odpovede[5], sprava->odpovede[6]);
+}
+
+const char *questions[BUFFER_CAPACITY] = {
+        "Zadaj pocet riadkov",
+        "Zadaj pocet stlpcov",
+        "Zadajte pocet mravcov v simulacii",
+        "Zadajte pocet krokov",
+        "Zadajte cislo [0] RANDOM [1] MANUAL [2] FILE",
+        "Zadajte logiku [0] PRIAMA [1] INVERZNA",
+        "Zadajte riesenie kolizii:\n[0] Mravec pri kolizii prestane existovat\n[1] Mravec sa pri kolizii zacne spravat podla opacnej logiky"
+};
+
+/**
+ * THREAD DATA
+ */
 typedef struct ThreadData {
     char buffer[BUFFER_CAPACITY][256];
     int buffer_size;
@@ -21,37 +54,28 @@ typedef struct ThreadData {
     pthread_mutex_t mutex;
     pthread_cond_t is_full;
     pthread_cond_t is_empty;
+
     int server_socket;
-    char questions[BUFFER_CAPACITY][256];
+    char *questions[BUFFER_CAPACITY];
+
 } THREAD_DATA;
-
-void Sprava_setAns(SPRAVA *sprava, int index, const char *value) {
-    if (index >= 0 && index < 7) {
-        snprintf(sprava->ans[index], sizeof(sprava->ans[index]), "%s", value);
-    }
-}
-
-
-void Sprava_serialize(const SPRAVA *sprava, char *output) {
-    snprintf(output, 1024, "%s;%s;%s;%s;%s;%s;%s;",
-             sprava->ans[0], sprava->ans[1], sprava->ans[2],
-             sprava->ans[3], sprava->ans[4], sprava->ans[5], sprava->ans[6]);
-}
 
 void ThreadData_init(THREAD_DATA *data, int server_socket) {
     data->buffer_size = 0;
+
     pthread_mutex_init(&data->mutex, NULL);
     pthread_cond_init(&data->is_full, NULL);
     pthread_cond_init(&data->is_empty, NULL);
-    data->server_socket = server_socket;
 
-    snprintf(data->questions[0], sizeof(data->questions[0]), "Zadaj pocet riadkov");
-    snprintf(data->questions[1], sizeof(data->questions[1]), "Zadaj pocet stlpcov");
-    snprintf(data->questions[2], sizeof(data->questions[2]), "Zadajte pocet mravcov v simulacii:");
-    snprintf(data->questions[3], sizeof(data->questions[3]), "Zadajte pocet krokov:");
-    snprintf(data->questions[4], sizeof(data->questions[4]), "Zadajte cislo [0] RANDOM [1] MANUAL [2] FILE");
-    snprintf(data->questions[5], sizeof(data->questions[5]), "Zadajte logiku [0] PRIAMA [1] INVERZNA");
-    snprintf(data->questions[6], sizeof(data->questions[6]), "Zadajte riesenie kolizii:\n[0] Mravec pri kolizii prestane existovat\n[1] Mravec sa pri kolizii zacne spravat podla opacnej logiky");
+    data->questions[0] = "Zadaj pocet riadkov";
+    data->questions[1] = "Zadaj pocet stlpcov";
+    data->questions[2] = "Zadajte pocet mravcov v simulacii:";
+    data->questions[3] = "Zadajte pocet krokov:";
+    data->questions[4] = "Zadajte cislo [0] RANDOM [1] MANUAL [2] FILE";
+    data->questions[5] = "Zadajte logiku [0] PRIAMA [1] INVERZNA";
+    data->questions[6] = "Zadajte riesenie kolizii:\n[0] Mravec pri kolizii prestane existovat\n[1] Mravec sa pri kolizii zacne spravat podla opacnej logiky";
+
+    data->server_socket = server_socket;
 }
 
 void ThreadData_destroy(THREAD_DATA *data) {
@@ -61,19 +85,22 @@ void ThreadData_destroy(THREAD_DATA *data) {
 }
 
 void ThreadData_produce(THREAD_DATA *data) {
+
     for (int i = 0; i < BUFFER_CAPACITY; ++i) {
+
         const char *current_question = data->questions[i];
+
         printf("OTAZKA %d: %s\n", i + 1, current_question);
 
-        char input[256];
-        scanf("%s", input);
+        char odpovedKlienta[256];
+        scanf("%s", odpovedKlienta);
 
         pthread_mutex_lock(&data->mutex);
         while (data->buffer_size >= BUFFER_CAPACITY) {
             pthread_cond_wait(&data->is_empty, &data->mutex);
         }
 
-        snprintf(data->buffer[data->buffer_size], sizeof(data->buffer[data->buffer_size]), "%s", input);
+        snprintf(data->buffer[data->buffer_size], sizeof(data->buffer[data->buffer_size]), "%s", odpovedKlienta);
         ++data->buffer_size;
 
         pthread_cond_signal(&data->is_full);
@@ -82,62 +109,49 @@ void ThreadData_produce(THREAD_DATA *data) {
 }
 
 void ThreadData_consume(THREAD_DATA *data) {
-    while (1) {
-        SPRAVA sprava;
+    SPRAVA sprava;
 
-        for (int i = 0; i < BUFFER_CAPACITY; ++i) {
-            char item[256];
+    for (int i = 0; i < BUFFER_CAPACITY; ++i) {
+        char item[256];
 
-            pthread_mutex_lock(&data->mutex);
-            while (data->buffer_size <= 0) {
-                pthread_cond_wait(&data->is_full, &data->mutex);
-            }
-
-            snprintf(item, sizeof(item), "%s", data->buffer[0]);
-            --data->buffer_size;
-            pthread_cond_signal(&data->is_empty);
-            pthread_mutex_unlock(&data->mutex);
-
-            Sprava_setAns(&sprava, i, item);
+        pthread_mutex_lock(&data->mutex);
+        while (data->buffer_size <= 0) {
+            pthread_cond_wait(&data->is_full, &data->mutex);
         }
+        snprintf(item, sizeof(item), "%s", data->buffer[0]);
+        --data->buffer_size;
+        pthread_cond_signal(&data->is_empty);
+        pthread_mutex_unlock(&data->mutex);
 
-        printf("UKONCENIE\n");
+        sprava_setOdpoved(&sprava, i, item);
+    }
 
-        if (data->server_socket != NULL) {
-            char output[1024];
-            Sprava_serialize(&sprava, output);
-            write(data->server_socket, output, strlen(output));
-        }
-        char buffer[1024];
-
-        bzero(buffer,1024);
-        read(data->server_socket, buffer, 255);
-
-        printf("%s\n",buffer);
-        close(data->server_socket);
+    if (data->server_socket != NULL) {
+        char output[1024];
+        sprava_koduj(&sprava, output);
+        write(data->server_socket, output, strlen(output));
     }
 }
 
+
 void *produce(void *data) {
-    ThreadData_produce((THREAD_DATA *)data);
+    ThreadData_produce((THREAD_DATA *) data);
     return NULL;
 }
 
 void *consume(void *data) {
-    ThreadData_consume((THREAD_DATA *)data);
+    ThreadData_consume((THREAD_DATA *) data);
     return NULL;
 }
 
+
 int main(int argc, char *argv[]) {
-
-    int sockfd, n;
+    int sockfd;
     struct sockaddr_in serv_addr;
-    struct hostent* server;
-
-    char buffer[256];
+    struct hostent *server;
 
     if (argc < 3) {
-        fprintf(stderr,"usage %s hostname port\n", argv[0]);
+        fprintf(stderr, "usage %s hostname port\n", argv[0]);
         return 1;
     }
 
@@ -147,31 +161,35 @@ int main(int argc, char *argv[]) {
         return 2;
     }
 
-    bzero((char*)&serv_addr, sizeof(serv_addr));
+    bzero((char *) &serv_addr, sizeof(serv_addr));
     serv_addr.sin_family = AF_INET;
     bcopy(
-            (char*)server->h_addr,
-            (char*)&serv_addr.sin_addr.s_addr,
+            (char *) server->h_addr,
+            (char *) &serv_addr.sin_addr.s_addr,
             server->h_length
     );
+
     serv_addr.sin_port = htons(atoi(argv[2]));
 
     sockfd = socket(AF_INET, SOCK_STREAM, 0);
+
     if (sockfd < 0) {
-        perror("Error creating socket");
+        perror("ERROR PRI VYTVARANI SOCKETU");
         return 3;
     }
 
-    if(connect(sockfd, (struct sockaddr*)&serv_addr, sizeof(serv_addr)) < 0) {
-        perror("Error connecting to socket");
+    if (connect(sockfd, (struct sockaddr *) &serv_addr, sizeof(serv_addr)) < 0) {
+        perror("ERROR PRI PRIPAJANI NA SOCKET");
         return 4;
     }
 
-    // Initialize my_socket if necessary
+
     THREAD_DATA data;
+
     ThreadData_init(&data, sockfd);
 
     pthread_t th_produce, th_consume;
+
     pthread_create(&th_produce, NULL, produce, &data);
     pthread_create(&th_consume, NULL, consume, &data);
 
@@ -179,6 +197,15 @@ int main(int argc, char *argv[]) {
     pthread_join(th_consume, NULL);
 
 
+    char buffer[1024];
+    bzero(buffer, 1024);
+
+    read(sockfd, buffer, 255);
+
+    printf("VYSLEDOK SIMULÁCIE\n");
+    printf("%s\n", buffer);
+    close(sockfd);
     ThreadData_destroy(&data);
+
     return 0;
 }
