@@ -1,0 +1,1 @@
+/usr/bin/cc -g CMakeFiles/lclClient.dir/main.c.o -o lclClient 
