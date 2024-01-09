@@ -34,15 +34,6 @@ void sprava_koduj(const SPRAVA *sprava, char *output) {
              sprava->odpovede[3], sprava->odpovede[4], sprava->odpovede[5], sprava->odpovede[6]);
 }
 
-const char *questions[BUFFER_CAPACITY] = {
-        "Zadaj pocet riadkov",
-        "Zadaj pocet stlpcov",
-        "Zadajte pocet mravcov v simulacii",
-        "Zadajte pocet krokov",
-        "Zadajte cislo [0] RANDOM [1] MANUAL [2] FILE",
-        "Zadajte logiku [0] PRIAMA [1] INVERZNA",
-        "Zadajte riesenie kolizii:\n[0] Mravec pri kolizii prestane existovat\n[1] Mravec sa pri kolizii zacne spravat podla opacnej logiky"
-};
 
 /**
  * THREAD DATA
